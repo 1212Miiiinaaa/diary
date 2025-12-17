@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧手帳 | 怪獸回歸版</title>
+    
+    <style>
+        /* --- 基礎設定 --- */
+        @font-face { font-family: 'CustomFont'; src: url('font.ttf') format('truetype'); }
+        :root { 
+            --primary-blue: #5fb6c7; 
+            --glass-bg: rgba(255, 255, 255, 0.9); 
+            --today-gold: #f1c40f; 
+            --text-color: #2c3e50;
+            --danger-red: #ff6b6b;
+        }
+        
+        body, html { margin: 0; padding: 0; font-family: 'CustomFont', sans-serif; color: var(--text-color); height: 100vh; overflow: hidden; background: #e0e7ee; }
+        
+        /* 1. 全螢幕大背景 (IMG_0907.jpg) */
+        .full-bg { 
+            background-image: url('IMG_0907.jpg'); 
+            background-size: cover; background-position: center; position: fixed; 
+            width: 100%; height: 100%; z-index: -1; filter: blur(15px) brightness(0.6); 
+        }
+        
+        .page-wrapper { display: flex; width: 200vw; height: 100vh; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .view-section { width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; flex: 1; min-height: 0; }
+        
+        /* 基礎卡片設定 */
+        .card { 
+            background: var(--glass-bg); border-radius: 40px; padding: 25px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid white; 
+            display: flex; flex-direction: column; position: relative; overflow: hidden; 
+        }
+        
+        /* 2. 透明度調整：將 IMG_1170.jpg 的透明度設為 0.1 (極淡背景) */
+        .detail-card-bg::before, .full-edit-card::before { 
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background-image: url('IMG_1170.jpg');
+            background-size: cover; background-position: center; 
+            opacity: 0.1; /* 這裡改為 0.1，變得很淡 */
+            z-index: 0; pointer-events: none; 
+        }
+        
+        /* 確保內容在背景之上 */
+        .card > * { position: relative; z-index: 1; }
+
+        .scrollable-content { flex: 1; overflow-y: auto; padding-right: 5px; }
+        .scrollable-content::-webkit-scrollbar { width: 6px; }
+        .scrollable-content::-webkit-scrollbar-thumb { background: var(--primary-blue); border-radius: 10px; }
+        
+        /* 日曆與行程樣式 */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 10px; }
+        .calendar-day { background: rgba(255,255,255,0.6); border-radius: 20px; cursor: pointer; position: relative; transition: 0.3s; min-height: 85px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        .today-box { border: 5px solid var(--today-gold) !important; box-shadow: 0 0 25px rgba(241, 196, 15, 0.6); z-index: 10; transform: scale(1.05); animation: pulse 2s infinite; }
+        
+        .today-img-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; filter: brightness(0.7); }
+        .day-num { font-size: 1.6rem; font-weight: bold; z-index: 2; color: #333; }
+        .today-box .day-num { font-size: 2.8rem !important; color: white !important; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); }
+
+        .simple-item { background: rgba(255, 255, 255, 0.8); padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; border-left: 5px solid var(--primary-blue); }
+        .simple-del-btn { margin-left: auto; color: #999; cursor: pointer; font-weight: bold; }
+
+        .timeline-container { position: relative; padding: 20px 0 20px 30px; border-left: 4px solid #ddd; margin-left: 20px; }
+        .timeline-item { position: relative; background: white; border-radius: 20px; padding: 25px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .timeline-time { display: inline-block; background: var(--primary-blue); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
+        
+        .photo-box { margin-top: 20px; width: 100%; height: 250px; background-color: #f0f4f8; border: 2px dashed #ccc; border-radius: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
+        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        .mood-selector { display: flex; justify-content: space-around; margin: 15px 0; }
+        .mood-icon { width: 70px; height: 70px; border-radius: 50%; cursor: pointer; filter: grayscale(100%); transition: 0.3s; object-fit: cover; }
+        .mood-icon.selected { filter: grayscale(0%); transform: scale(1.15); border: 3px solid var(--primary-blue); }
+        #timer-top { text-align: center; color: white; margin-bottom: 10px; font-size: 1.2rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <div class="full-bg"></div>
+    <div id="timer-top">正在同步時光...</div>
+
+    <div class="page-wrapper" id="pageWrapper">
+        <section class="view-section">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-shrink: 0;">
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <button onclick="changeMonth(-1)" style="border:none; background:none; font-size:1.8rem; cursor:pointer; color:var(--primary-blue);">◀</button>
+                            <h2 id="monthTitle" style="margin:0; font-size:2rem;"></h2>
+                            <button onclick="changeMonth(1)" style="border:none; background:none; font-size:1.8rem; cursor:pointer; color:var(--primary-blue);">▶</button>
+                        </div>
+                        <button onclick="document.getElementById('icsInput').click()" style="background:var(--primary-blue); color:white; border:none; padding:10px 20px; border-radius:15px; cursor:pointer;">📅 匯入 ICS</button>
+                        <input type="file" id="icsInput" accept=".ics" style="display:none;" onchange="importICS(this)">
+                    </div>
+                    <div class="scrollable-content"><div class="calendar-grid" id="calendarGrid"></div></div>
+                    <div style="margin-top:10px; display:flex; gap:8px; background:rgba(255,255,255,0.7); padding:10px; border-radius:20px; flex-shrink: 0;">
+                        <input type="time" id="quickTime" value="09:00" style="padding:8px; border-radius:10px; border:1px solid #ddd;">
+                        <input type="text" id="quickText" placeholder="⚡ 快速新增今日行程..." style="flex:1; padding:8px; border-radius:10px; border:1px solid #ddd;">
+                        <button onclick="quickAddTodo()" style="background:var(--primary-blue); color:white; border:none; border-radius:12px; padding:0 20px;">加入</button>
+                    </div>
+                </div>
+
+                <div class="card detail-card-bg">
+                    <h2 id="sideDateLabel" style="color:var(--primary-blue); font-size:1.8rem; cursor:pointer;" onclick="switchToPage(1)">📅 詳細編輯 ➤</h2>
+                    <div class="scrollable-content">
+                        <div id="sideTodoList" style="margin-top:10px;"></div>
+                        <div style="margin-top:20px; border-top:1px dashed #ccc; padding-top:15px;">
+                            <h3 style="color:var(--primary-blue);">🌈 今日心情</h3>
+                            <div class="mood-selector">
+                                <img src="mood1.jpg" class="mood-icon" onclick="selectMood(0)">
+                                <img src="mood3.jpg" class="mood-icon" onclick="selectMood(1)">
+                                <img src="mood2.jpg" class="mood-icon" onclick="selectMood(2)">
+                            </div>
+                        </div>
+                        <textarea id="sideNoteIn" style="width:100%; height:100px; border-radius:20px; padding:15px; font-family:'CustomFont'; resize:none;" oninput="syncNote(this.value)" placeholder="寫下今天的心情..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="view-section">
+            <div class="card full-edit-card" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="switchToPage(0)" style="padding:10px 20px; border-radius:15px; background:#ddd; border:none; cursor:pointer;">◀ 返回日曆</button>
+                    <h1 id="fullDateLabel" style="font-size:2rem; margin:0; color:var(--primary-blue);"></h1>
+                </div>
+                <div class="scrollable-content">
+                    <div class="timeline-container" id="fullTimelineList"></div>
+                    <div style="margin-top:40px; border-top:2px solid #eee; padding-top:20px;">
+                        <h2 style="color:#555;">📝 總結與筆記</h2>
+                        <textarea id="fullNoteIn" style="width:100%; height:200px; border-radius:20px; padding:20px; font-size:1.2rem; border:1px solid #ddd;" oninput="syncNote(this.value)"></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const now = new Date();
+        let currentYear = now.getFullYear(); let currentMonth = now.getMonth(); let selectedDateKey = "";
+        const realTodayKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const defaultBgUrl = "IMG_0907.jpg";
+
+        function switchToPage(index) { document.getElementById('pageWrapper').style.transform = `translateX(-${index * 100}vw)`; }
+        function renderCalendar() {
+            const grid = document.getElementById("calendarGrid"); grid.innerHTML = "";
+            document.getElementById("monthTitle").innerText = `${currentYear}年 ${currentMonth + 1}月`;
+            ['日','一','二','三','四','五','六'].forEach(d => {
+                const h = document.createElement("div"); h.style.textAlign="center"; h.innerText=d; grid.appendChild(h);
+            });
+            const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement("div"));
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dKey = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                const data = JSON.parse(localStorage.getItem(dKey) || '{"todos":[]}');
+                const dEl = document.createElement("div"); dEl.className = `calendar-day ${dKey === realTodayKey ? 'today-box' : ''}`;
+                let innerHTML = `<div class="day-num">${i}</div>`;
+                if (dKey === realTodayKey) innerHTML = `<img src="${defaultBgUrl}" class="today-img-bg"><div class="day-num">${i}</div>`;
+                if(data.todos.length > 0) innerHTML += `<div style="width:10px; height:10px; background:#ff4d4d; border-radius:50%; margin-top:5px; z-index:2; border:2px solid white;"></div>`;
+                dEl.innerHTML = innerHTML;
+                dEl.onclick = () => selectDate(dKey, i);
+                grid.appendChild(dEl);
+            }
+        }
+        function selectDate(key, dayNum) {
+            selectedDateKey = key; const parts = key.split('-');
+            document.getElementById("sideDateLabel").innerText = `📅 ${parts[1]}月${parts[2]}日 詳細編輯 ➤`;
+            document.getElementById("fullDateLabel").innerText = `${parts[1]}月${parts[2]}日 的時光軌跡`;
+            loadData(); renderCalendar();
+        }
+        function loadData() {
+            const data = JSON.parse(localStorage.getItem(selectedDateKey) || '{"todos":[], "note":"", "mood":-1}');
+            const sideList = document.getElementById("sideTodoList"); sideList.innerHTML = "";
+            data.todos.forEach((t, i) => {
+                sideList.innerHTML += `<div class="simple-item"><b>${t.time}</b> <span>${t.text}</span></div>`;
+            });
+            const timelineList = document.getElementById("fullTimelineList"); timelineList.innerHTML = "";
+            data.todos.forEach((t, i) => {
+                const photoSrc = t.photo || ""; 
+                const photoHtml = photoSrc ? `<img src="${photoSrc}">` : `<span>📷 點擊設定照片</span>`;
+                timelineList.innerHTML += `
+                    <div class="timeline-item">
+                        <span class="timeline-time">${t.time}</span>
+                        <div class="timeline-content"><h3>${t.text}</h3><div class="photo-box" onclick="uploadPhoto(${i})">${photoHtml}</div></div>
+                    </div>`;
+            });
+            document.getElementById("sideNoteIn").value = data.note || "";
+            document.getElementById("fullNoteIn").value = data.note || "";
+            const icons = document.querySelectorAll('.mood-icon');
+            icons.forEach((icon, i) => icon.classList.toggle('selected', i === data.mood));
+        }
+        function uploadPhoto(idx) {
+            const url = prompt("請輸入照片網址:", defaultBgUrl);
+            if(url) {
+                const data = JSON.parse(localStorage.getItem(selectedDateKey));
+                data.todos[idx].photo = url; localStorage.setItem(selectedDateKey, JSON.stringify(data));
+                loadData();
+            }
+        }
+        function quickAddTodo() {
+            const t = document.getElementById("quickText").value; const tm = document.getElementById("quickTime").value;
+            if(!t) return; const targetKey = selectedDateKey || realTodayKey;
+            const data = JSON.parse(localStorage.getItem(targetKey) || '{"todos":[]}');
+            data.todos.push({text:t, time:tm, photo:""}); data.todos.sort((a,b)=>a.time.localeCompare(b.time));
+            localStorage.setItem(targetKey, JSON.stringify(data));
+            document.getElementById("quickText").value = ""; selectDate(targetKey, 0);
+        }
+        function syncNote(val) {
+            document.getElementById("sideNoteIn").value = val; document.getElementById("fullNoteIn").value = val;
+            const data = JSON.parse(localStorage.getItem(selectedDateKey) || '{"todos":[]}');
+            data.note = val; localStorage.setItem(selectedDateKey, JSON.stringify(data));
+        }
+        function selectMood(idx) {
+            const data = JSON.parse(localStorage.getItem(selectedDateKey) || '{"todos":[]}');
+            data.mood = idx; localStorage.setItem(selectedDateKey, JSON.stringify(data)); loadData();
+        }
+        function changeMonth(s) { currentMonth+=s; if(currentMonth>11){currentMonth=0;currentYear++;}else if(currentMonth<0){currentMonth=11;currentYear--;} renderCalendar(); }
+        function updateCountdown() {
+            const nextYear = new Date().getFullYear() + 1;
+            const diff = new Date(`${nextYear}-01-01T00:00:00`).getTime() - new Date().getTime();
+            const d = Math.floor(diff/86400000); const h = Math.floor((diff%86400000)/3600000);
+            const m = Math.floor((diff%3600000)/60000); const s = Math.floor((diff%60000)/1000);
+            document.getElementById("timer-top").innerText = `⏳ 倒數新生活：${d}天 ${h}時 ${m}分 ${s}秒`;
+        }
+        selectDate(realTodayKey, now.getDate()); setInterval(updateCountdown, 1000); updateCountdown();
+    </script>
+</body>
+</html>
